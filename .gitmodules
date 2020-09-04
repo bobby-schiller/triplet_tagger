@@ -1,0 +1,3 @@
+[submodule "lorentzNN"]
+	path = lorentzNN
+	url = https://github.com/bobby-schiller/lorentzNN
