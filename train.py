@@ -11,7 +11,7 @@ import lorentzNN.lorentzNN as lNN
 import lorentzNN.model_handler as mh
 import lorentzNN.model_benchmark as bench
 import torch
-import matplotlib as plt
+import matplotlib.pyplot as plt
 
 model_file = 'out_file_e_20.tar'
 
@@ -24,11 +24,10 @@ learning_rate = 0.001
 data = load('new_jt_trainFull.npz')
 data_cat = load('new_jt_trainFull_cat.npz')
 np_train = data['input']
-np_
-
+trip_targ_cat = data_cat['targets']
+trip_targ = data['targets']
 
 def train():
-  
   # initialize LorentzNN model
   lorentz_model = lNN.LorentzNN("/scratch365/rschill1/nn/inputs/ \
                       lNN_standards/p_standard1.npz",
@@ -47,12 +46,12 @@ def train():
   triplets = np.array((10000000,4,3))
   for ev in np_train[:500000]:
     for iter_i, iter in comb:
-      triplets[i] = np.take(jetv_train,iter).transpose()
+      triplets[i] = np.take(np_train,iter).transpose()
       i+=1
   
-  input = torch.as_tensor(triplets, dtype=torch.double)
+  inp = torch.as_tensor(triplets, dtype=torch.double)
   targets = torch.as_tensor(np.zeros(10000000), dtype=torch.double)
-  dataset = dutils.TensorDataset(input, targets)
+  dataset = dutils.TensorDataset(inp, targets)
   dutils.DataLoader(dataset, batch_size=200, shuffle=False, drop_last=False)
   
   # Run through the data and calculate triplet probabilities
@@ -72,7 +71,7 @@ def train():
   
   # Send the lorentz_in and targets to tensors
   triplet_input = torch.as_tensor(trip_in,dtype=torch.double)
-  triplet_targets = torch.as_tensor(
+  triplet_targets = torch.as_tensor(trip_targ_cat,dtype=torch.double)
   
   batch_size = 200
   
@@ -90,6 +89,8 @@ def train():
   triplet_model = triplet_tagger()
   
   loss_array = []
+  loss_func1 = torch.nn.CrossEntropyLoss()
+  optimizer = torch.optim.Adam(triplet_model.parameters(), lr=learning_rate)
   
   # Train the triplet_tagger layer
   max_epoch = 20
@@ -98,17 +99,22 @@ def train():
     
     for minibatch in range(num_minibatch):
       out = model(inputMiniBatches[miniBatch])
-      item_loss = loss(out,outputMiniBatches[miniBatch])
-      epoch_loss += item_loss.item()
+      loss = loss_func1(out,outputMiniBatches[miniBatch])
+      epoch_loss += loss.item()
 
       optimizer.zero_grad()
       loss.backward()
       optimizer.step()
     
-    loss_array.append(epoch_loss)
+  loss_array.append(epoch_loss)
   
-  
+  # compute the accuracy
+  acc_array = []
   
   epoch_array = np.arange(0,max_epoch)
-  loss_plot = plt.plot(epoch_array,loss_array)
-  loss_plot.savefig('loss_plot.show')
+  plt.plot(epoch_array,loss_array)
+  plt.savefig('/scratch365/rschill1/nn/loss_plot.png')
+
+
+if __name__ == "__main__":
+    train()
