@@ -1,6 +1,6 @@
 ## Code to train the fully-connected layer after the lorentzNN
 # Author: Bobby Schiller
-# Last Modified: 3 September 2020
+# Last Modified: 17 September 2020
 
 import argparse
 import time
@@ -11,6 +11,7 @@ import lorentzNN.lorentzNN as lNN
 import lorentzNN.model_handler as mh
 import lorentzNN.model_benchmark as bench
 import torch
+import matplotlib as plt
 
 model_file = 'out_file_e_20.tar'
 
@@ -20,8 +21,11 @@ comb = list(combination(range(6),3))
 
 learning_rate = 0.001
 
-data = load('jets.npz')
-jetv_train = data['jetv_train']
+data = load('new_jt_trainFull.npz')
+data_cat = load('new_jt_trainFull_cat.npz')
+np_train = data['input']
+np_
+
 
 def train():
   
@@ -38,7 +42,7 @@ def train():
   handler = mh.ModelHandler(lorentz_model, loss_func, optim, batch_size=200)
   handler.loadModel(model_file, True)
   
-  # Generate the dataset in the form required by LorentzNN
+  # Generate the dataset in the form required by LorentzNN, with dummy targets
   i = 0
   triplets = np.array((10000000,4,3))
   for ev in np_train[:500000]:
@@ -66,12 +70,29 @@ def train():
         i+=1
         j=0
   
+  # Send the lorentz_in and targets to tensors
+  triplet_input = torch.as_tensor(trip_in,dtype=torch.double)
+  triplet_targets = torch.as_tensor(
+  
+  batch_size = 200
+  
+  # Break up the training tensors into mini-batches
+  trainSize = triplet_input.shape[0]
+  numMiniBatch = int(math.ceil(trainSize/float(batch_size)))
+  inputMiniBatches = triplet_input.chunk(numMiniBatch)
+  outputMiniBatches = triplet_targets.chunk(numMiniBatch)
+  if trainSize % args.batch_size != 0:
+    print ('Warning: Training set size ({}) does not divide evenly into batches of {}'.format(trainSize,args.batch_size),file=out_stream)
+    print ('-->Discarding the remaider, {} examples'.format(trainSize % args.batch_size),file=out_stream)
+    numMiniBatch -= 1
+  
   # initialize triplet_tagger layer
   triplet_model = triplet_tagger()
   
+  loss_array = []
+  
   # Train the triplet_tagger layer
   max_epoch = 20
-  num_minibatch = 
   for epoch in range(max_epoch):
     epoch_loss = 0
     
@@ -83,3 +104,11 @@ def train():
       optimizer.zero_grad()
       loss.backward()
       optimizer.step()
+    
+    loss_array.append(epoch_loss)
+  
+  
+  
+  epoch_array = np.arange(0,max_epoch)
+  loss_plot = plt.plot(epoch_array,loss_array)
+  loss_plot.savefig('loss_plot.show')
