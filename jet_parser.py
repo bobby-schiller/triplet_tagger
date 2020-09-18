@@ -8,20 +8,20 @@ from itertools import combinations
 
 data = load('jets.npz')
 
-num_ev = len(data['match_validation'])
+num_ev = len(data['match_train'])
 
 # Generate combinations of triplets
 comb = list(combinations(range(6),3))
 
 # categorical and numerical forms
-match_train_cat = np.zeros(num_ev,21)
-match_train = np.zeros(num_ev,1]
+match_train_cat = np.zeros((num_ev,21))
+match_train = np.zeros((num_ev,1))
 
 # discard events with more than 3 matches (not triplets)
 drop_event = []
 
 # compute match for each triplet; append to new match_
-for ev_i, event in enumerate(data['match_validation']):
+for ev_i, event in enumerate(data['match_train']):
   if np.sum(event) > 3:
     drop_event.append(ev_i)
     continue
@@ -37,7 +37,7 @@ for ev_i, event in enumerate(data['match_validation']):
 
 target_cat = np.delete(match_train_cat,drop_event,0)
 target = np.delete(match_train,drop_event,0)
-input = np.delete(jetv_train,drop_event,0)
+input = np.delete(data['jetv_train'],drop_event,0)
 
-np.savez("new_jt_validationFull_cat",target=target_cat,input=input)
-np.savez("new_jt_validationFull",target=target,input=input)
+np.savez("new_jt_trainFull_cat",targets=target_cat,input=input)
+np.savez("new_jt_trainFull",targets=target,input=input)
