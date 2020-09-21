@@ -1,6 +1,8 @@
 ## Code to train the fully-connected layer after the lorentzNN
 # Author: Bobby Schiller
-# Last Modified: 17 September 2020
+# Last Modified: 20 September 2020
+
+# TODO: Refactor and clean up variable names
 
 import argparse
 import time
@@ -16,7 +18,7 @@ import matplotlib.pyplot as plt
 import torch.utils.data as dutils
 import math
 
-model_file = '/scratch365/rschill1/nn/lorentzNN/run04e20.tar'
+model_file = '/scratch365/rschill1/nn/lorentzNN/run00e29.tar'
 
 # generate list of combinations of 3 jets in [0,5]
 # itertools provides standard indexing for the triplet combinations 
@@ -58,34 +60,37 @@ def train():
   targets = torch.as_tensor(np.ones(1000000), dtype=torch.double)
   dataset = dutils.TensorDataset(inp, targets)
   lorentz_dataset = dutils.DataLoader(dataset, batch_size=200, shuffle=False, drop_last=False)
-  for i in lorentz_dataset:
-    print(i[0])
-    break 
+  
   # Run through the data and calculate triplet probabilities
   lorentz_out = []
   with torch.no_grad():
     for batch in lorentz_dataset:
       handler.model.eval()
       lorentz_out.append(handler.model(torch.as_tensor(batch[0],device=torch.device('cuda'))))
-   
-  print(lorentz_out[0][0])
+      
   # Collect the output data and organize it into events
   trip_in = np.zeros((50000,40))
   i = 0
   j = 0
+  jet_acc = 0
   for batch in lorentz_out:
     for trip in batch:
+      if max(trip[1::2]) > 0.5:
+        hit = torch.argmax(trip[1::2])
+      else:
+        hit = 0
+      if hit == trip_targ[i].item():
+        jet_acc += 1
       for match in trip:
         trip_in[i][j] = match
         j+=1
         if j == 40:
           i+=1
           j=0
-  
+
   # Send the lorentz_in and targets to tensors
   triplet_input = torch.as_tensor(trip_in,dtype=torch.double)
-  triplet_targets = torch.as_tensor(trip_targ_cat,dtype=torch.double)
-  
+  triplet_targets = torch.as_tensor(trip_targ[:50000],dtype=torch.double)
   batch_size = 200
   
   # Break up the training tensors into mini-batches
@@ -96,23 +101,23 @@ def train():
   if trainSize % 200 != 0:
     print ('Warning: Training set size ({}) does not divide evenly into batches of {}'.format(trainSize,args.batch_size),file=out_stream)
     print ('-->Discarding the remaider, {} examples'.format(trainSize % args.batch_size),file=out_stream)
-    numMiniBatch -= 1
-  
+    numMiniBatch -= 1  
+ 
   # initialize triplet_tagger layer
   triplet_model = tt.triplet_tagger()
-  
+  triplet_model.double() 
   loss_array = []
   loss_func1 = torch.nn.CrossEntropyLoss()
   optimizer = torch.optim.Adam(triplet_model.parameters(), lr=learning_rate)
-  
+
   # Train the triplet_tagger layer
   max_epoch = 20
   for epoch in range(max_epoch):
     epoch_loss = 0
     
-    for minibatch in range(numMiniBatch):
+    for miniBatch in range(numMiniBatch):
       out = triplet_model(inputMiniBatches[miniBatch])
-      loss = loss_func1(out,outputMiniBatches[miniBatch])
+      loss = loss_func1(out,torch.reshape(outputMiniBatches[miniBatch],(-1,)).long())
       epoch_loss += loss.item()
 
       optimizer.zero_grad()
@@ -122,12 +127,31 @@ def train():
     loss_array.append(epoch_loss)
   
   # compute the accuracy
-  acc_array = []
+  total_out = []
+  acc_count = 0
+  for miniBatch in range(numMiniBatch):
+    out = triplet_model(inputMiniBatches[miniBatch])
+    total_out.append(out)
+  out_array = []
+  for batch in total_out:
+    for i,event in enumerate(batch):
+      hit = torch.argmax(event).item()
+      out_array.append(hit)
+      if hit == trip_targ[i]:
+        acc_count+=1
+
+  acc = acc_count/(len(total_out*len(total_out[0])))
+  print("ACC: {}".format(acc))
   
+  acc1 = jet_acc/len(total_out*len(total_out[0]))
+  print("ACC1: {}".format(acc1)) 
+ 
+  plt.hist(out_array)
+  plt.savefig('/scratch365/rschill1/logs/out_plot.png')
+ 
   epoch_array = np.arange(0,max_epoch)
   plt.plot(epoch_array,loss_array)
   plt.savefig('/scratch365/rschill1/nn/loss_plot.png')
-
 
 if __name__ == "__main__":
     train()

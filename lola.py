@@ -118,7 +118,7 @@ class Lola(nn.Module):
         self.metric = torch.as_tensor(metric_vector,
                                       dtype=torch.double,
                                       device=device)
-        print(self.metric.device)
+
         # First parse input into helpful matrices, pull vectors of n_features
         # Es, Xs, Ys, and Zs
         Es = x[:, 0, :]
