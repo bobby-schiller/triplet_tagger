@@ -6,53 +6,58 @@ import numpy as np
 from numpy import load
 from itertools import combinations
 
-print(np.random.permutation(20))
-
 data = load('jets.npz')
-
-#num_ev = len(data['match_validation'])
-num_ev = 500000
+arr = ["train","validation","testing"]
 
 # Generate combinations of triplets
 comb = list(combinations(range(6),3))
 
-# target array
-match_train = np.zeros((num_ev,1))
+for arr_name in arr:
+  num_ev = len(data[("match_"+arr_name)])
 
-# discard events with more than 3 matches (not triplets)
-drop_event = []
+  # target array
+  match_train = np.zeros((num_ev,1))
 
-drop = 0
-hit = 0
-miss = 0
+  # discard events with more than 3 matches (not triplets)
+  drop_event = []
 
-# compute match for each triplet; append to new match_
-for ev_i, event in enumerate(data['match_train']):
-  index = hit + miss
-  if np.sum(event) > 3:
-    drop_event.append(ev_i)
-    drop += 1
-    continue
-  elif np.sum(event) < 3:
-    if miss == 0.1*num_ev:
+  drop = 0
+  hit = 0
+  miss = 0
+  hits = np.zeros(20)
+
+  # compute match for each triplet; append to new match_
+  for ev_i, event in enumerate(data[("match_"+arr_name)]):
+    index = hit + miss
+    if np.sum(event) > 3:
+      drop_event.append(ev_i)
+      drop += 1
       continue
-    match_train[index] = 20
-    miss += 1
-    continue
-  for iter_i, iter in enumerate(comb):
-    if np.sum(np.take(event,iter,0)) == 3:
-      if hit == 0.9*num_ev:
-        break
-      match_train[index] = iter_i
-      hit += 1
+    elif np.sum(event) < 3:
+      if miss >= 0.05*num_ev:
+        continue
+      match_train[index] = 20
+      miss += 1
       continue
+    for iter_i, iter in enumerate(comb):
+      if np.sum(np.take(event,iter,0)) == 3:
+        if hits[iter_i] > 0.05*num_ev:
+          continue
+        if hit >= 0.95*num_ev:
+          break
+        match_train[index] = iter_i
+        hit += 1
+        hits[iter_i] += 1
+        continue
 
-target = match_train[:-(drop)]
-input = np.delete(data['jetv_train'],drop_event,0)
+  target = match_train[:-(drop)]
+  input = np.delete(data[("jetv_"+arr_name)],drop_event,0)
 
-# shuffle the data
-shuffler = np.random.permutation(len(target))
-target = target[shuffler]
-input = input[shuffler]
+  # shuffle the data
+  shuffler = np.random.permutation(len(target))
+  target = target[shuffler]
+  input = input[shuffler]
 
-np.savez("new_jt_trainFull",targets=target,input=input)
+  print(len(target))
+
+  np.savez("jt_"+arr_name+".npz",targets=target,input=input)

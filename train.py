@@ -1,8 +1,6 @@
 ## Code to train the fully-connected layer after the lorentzNN
 # Author: Bobby Schiller
-# Last Modified: 20 September 2020
-
-# TODO: Refactor and clean up variable names
+# Last Modified: 4 October 2020
 
 import argparse
 import time
@@ -16,38 +14,51 @@ import matplotlib.pyplot as plt
 import torch.utils.data as dutils
 import math
 
-trained_layers = '/scratch365/rschill1/nn/lorentzNN/run02e20.tar'
-#trained_layers = False
+#trained_layers = '/scratch365/rschill1/nn/lorentzNN/run02e20.tar'
+trained_layers = False
 
 # generate list of combinations of 3 jets in [0,5]
 # itertools provides standard indexing for the triplet combinations 
 comb = list(combinations(range(6),3))
 
 learning_rate = 0.001
-event_num = 400000
+event_num = 1000000
 batch_size = 100
+max_epoch = 40
 
-train_data = load('/scratch365/rschill1/nn/triplet_tagger/jt_trainFull_balanced.npz')
-validation = load('/scratch365/rschill1/nn/triplet_tagger/new_new_jt_testingFull.npz')
-#testing = load('/scratch365/rschill1/nn/triplet_tagger/jt_testingFull.npz')
+train_data = load('/scratch365/rschill1/nn/triplet_tagger/jt_train.npz')
+validation_data = load('/scratch365/rschill1/nn/triplet_tagger/jt_validation.npz')
+testing_data = load('/scratch365/rschill1/nn/triplet_tagger/jt_testing.npz')
 
 def train():
 
-  lorentz_dataset = lorentz_format(train_data,event_num)
+  parser = argparse.ArgumentParser(description='Train ANN auto-encoder.')
+  parser.add_argument('-N','--num-epochs',
+                        default=10, type=int,
+                        help='Number of epochs')
+  parser.add_argument('-L','--trained_layers',
+                        default=False,
+                        help='Pre-trained LorentzNN file')
+
+  args = parser.parse_args()
+
+  train_dataset = lorentz_format(train_data,event_num)
+  validation_dataset = lorentz_format(validation_data,50000)
+  testing_dataset = lorentz_format(testing_data,100000)
 
   # initialize triplet_tagger layer
   model = tt.triplet_tagger()
   model.double()
   model.to(device=torch.device('cuda')) 
   loss_array = []
-  loss_func1 = torch.nn.CrossEntropyLoss()
-  #optimizer = torch.optim.Adam(triplet_model.parameters(),lr=learning_rate)
-  optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.95)
+  loss_func = torch.nn.CrossEntropyLoss()
+  #optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.95)
+  optimizer = torch.optim.Adam(model.parameters())
   validation_dataset = lorentz_format(validation,10000)
   evaluate(model,validation_dataset,"initial")
 
   # lock gradients and load pre-trained lorentzNN layers, if desired
-  if trained_layers:
+  if args.trained_layers:
     model.lorentz_model.requires_grad = False
     checkpoint = torch.load(trained_layers)
     model.lorentz_model.load_state_dict(checkpoint['model_state_dict'])
@@ -56,70 +67,36 @@ def train():
     model.lorentz_model.standardize.means_mat = checkpoint['standard_means']
     model.lorentz_model.standardize.stds_mat = checkpoint['standard_stds']
 
-  # Train the triplet_tagger layer
-  max_epoch = 10
+  ######## TRAINING ########
+  current_min_loss = 100000000
+  current_min_loss_epoch = 0
   epoch_loss = []
   for epoch in range(max_epoch):
     running_epoch_loss = 0
     for batch in lorentz_dataset:
       out = model(batch[0].to(device=torch.device('cuda')))
-      loss = loss_func1(out,torch.squeeze((batch[1].long()).to(device=torch.device('cuda'))))
-      #loss_array.append(float(loss))
+      loss = loss_func(out,torch.squeeze((batch[1].long()).to(device=torch.device('cuda'))))
       running_epoch_loss += float(loss)
 
       optimizer.zero_grad()
       loss.backward()
       optimizer.step()
+
+    ######## VALIDATION ########
     epoch_loss.append(running_epoch_loss)
     evaluate(model,validation_dataset,"e"+str(epoch))
+    if running_epoch_loss < current_min_loss:
+      current_min_loss = running_epoch_loss
+      current_min_loss_epoch = epoch
+    elif running_epoch_loss >= current_min_loss and (epoch-current_min_loss_epoch)>= 5:
+      break
 
-  ######## VALIDATION ########
-  
-  evaluate(model,validation_dataset,"final")
-  """
-  plt.plot(loss_array)
-  plt.savefig('/scratch365/rschill1/logs/loss_plot.png')
-  plt.clf()"""
+  ######## TESTING ########
+  evaluate(model,testing_dataset,"final")
 
   plt.plot(epoch_loss)
-  plt.savefig('/scratch365/rschill1/logs/epoch_loss_plot.png')
+  plt.savefig('/scratch365/rschill1/logs/epochs_loss_plot.png')
   plt.clf()
-
-"""
-  total_out = []
-  for batch in validation_dataset:
-    with torch.no_grad:
-      total_out.append(model(batch[0].to(device=torch.device('cuda'))))
-  out_array = []
-  for batch in total_out:
-    for i,event in enumerate(batch):
-      hit = torch.argmax(event).item()
-      out_array.append(hit)
-
-
-  # evaluate without triplet_tagger
-  jet_acc = 0
-  for ev_i, event in enumerate(trip_in):
-    hits = event[1::2]
-    if max(hits) > 0.5:
-      hit = np.argmax(hits)
-    else:
-      hit = 0
-    if trip_targ[ev_i] == hit:
-      jet_acc += 1
-
-  acc = acc_count/(len(total_out*len(total_out[0])))
-  print("ACC: {}".format(acc))
-  
-  acc1 = jet_acc/len(total_out*len(total_out[0]))
-  print("ACC1: {}".format(acc1)) 
-
-  
-  ######## PLOTTING ########
-  plt.hist(out_array)
-  plt.savefig('/scratch365/rschill1/logs/out_plot.png')
-  plt.clf()
-""" 
 
 # Shape the data into the correct format for passing to lorentzNN
 def lorentz_format(data,event_num):
@@ -131,8 +108,10 @@ def lorentz_format(data,event_num):
     for iter in comb:
       # [particles,features]=>[features,particles]
       temp = np.take(ev,iter,0).transpose()
-      # [px,py,pz,E]=>[E,px,py,pz]
+      # [px,py,pz,E]=>[E,px,py,pz] using row swaps
       temp[[0,3]] = temp[[3,0]]
+      temp[[2,3]] = temp[[3,2]]
+      temp[[1,2]] = temp[[2,1]]
       jetv[i][j] = temp
       j+=1
     j=0
@@ -166,7 +145,10 @@ def evaluate(model,dataset,filename):
         if hit == target[i]:
           acc_count+=1
           correct_out_array.append(target[i])
+
+    ######## ACCURACY AND PLOTTING ########
     print(acc_count/(len(out_array)))
+
     out_array.sort()
     target.sort()
     plt.hist([out_array,target],bins=21)
