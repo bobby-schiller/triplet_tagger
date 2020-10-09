@@ -1,6 +1,6 @@
 ## Class to define final, fully-connected layer
-# [input] : [40,1] - softmax outputs of all 20 lorentzNN triplets
-# [output] : [21,1] - raw logit output tagging correct triplet (or none)
+# [input] : [20,4,3] - all 20 triplets in an event
+# [output] : [21] - raw logit output tagging correct triplet (or none)
 # Author: Bobby Schiller
 # Last Modified: 30 September 2020
 

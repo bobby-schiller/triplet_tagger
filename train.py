@@ -14,15 +14,15 @@ import matplotlib.pyplot as plt
 import torch.utils.data as dutils
 import math
 
-#trained_layers = '/scratch365/rschill1/nn/lorentzNN/run02e20.tar'
-trained_layers = False
+trained_layers = '/scratch365/rschill1/nn/lorentzNN/run02e20.tar'
+#trained_layers = False
 
 # generate list of combinations of 3 jets in [0,5]
 # itertools provides standard indexing for the triplet combinations 
 comb = list(combinations(range(6),3))
 
 learning_rate = 0.001
-event_num = 1000000
+event_num = 200000
 batch_size = 100
 max_epoch = 40
 
@@ -43,8 +43,8 @@ def train():
   args = parser.parse_args()
 
   train_dataset = lorentz_format(train_data,event_num)
-  validation_dataset = lorentz_format(validation_data,50000)
-  testing_dataset = lorentz_format(testing_data,100000)
+  validation_dataset = lorentz_format(validation_data,10000)
+  testing_dataset = lorentz_format(testing_data,10000)
 
   # initialize triplet_tagger layer
   model = tt.triplet_tagger()
@@ -53,27 +53,28 @@ def train():
   loss_array = []
   loss_func = torch.nn.CrossEntropyLoss()
   #optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.95)
-  optimizer = torch.optim.Adam(model.parameters())
-  validation_dataset = lorentz_format(validation,10000)
-  evaluate(model,validation_dataset,"initial")
+  optimizer = torch.optim.Adam(model.parameters(),lr=0.001)
 
   # lock gradients and load pre-trained lorentzNN layers, if desired
   if args.trained_layers:
     model.lorentz_model.requires_grad = False
-    checkpoint = torch.load(trained_layers)
+    checkpoint = torch.load(args.trained_layers)
     model.lorentz_model.load_state_dict(checkpoint['model_state_dict'])
     model.lorentz_model.cola.Cij = checkpoint['cola_weights']
     model.lorentz_model.lola.w = checkpoint['lola_weights']
     model.lorentz_model.standardize.means_mat = checkpoint['standard_means']
     model.lorentz_model.standardize.stds_mat = checkpoint['standard_stds']
 
+  evaluate(model,validation_dataset,"initial")
+
   ######## TRAINING ########
-  current_min_loss = 100000000
+  current_min_loss = 10000000
   current_min_loss_epoch = 0
   epoch_loss = []
   for epoch in range(max_epoch):
+    model.train()
     running_epoch_loss = 0
-    for batch in lorentz_dataset:
+    for batch in train_dataset:
       out = model(batch[0].to(device=torch.device('cuda')))
       loss = loss_func(out,torch.squeeze((batch[1].long()).to(device=torch.device('cuda'))))
       running_epoch_loss += float(loss)
@@ -95,7 +96,7 @@ def train():
   evaluate(model,testing_dataset,"final")
 
   plt.plot(epoch_loss)
-  plt.savefig('/scratch365/rschill1/logs/epochs_loss_plot.png')
+  plt.savefig('/scratch365/rschill1/logs/loss_plot.png')
   plt.clf()
 
 # Shape the data into the correct format for passing to lorentzNN
