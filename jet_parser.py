@@ -1,63 +1,66 @@
 ## Parser to convert jets.npz file into correct input files
 # Author: Bobby Schiller
-# Last Modified: 20 September 2020
+# Last Modified: 30 October 2020
 
 import numpy as np
 from numpy import load
 from itertools import combinations
 
-data = load('jets.npz')
-arr = ["train","validation","testing"]
+data = load('/scratch365/rschill1/nn/triplet_tagger/jets.npz')
+#arr = ["train","validation","testing"]
+#arr = ["validation","testing"]
 
 # Generate combinations of triplets
 comb = list(combinations(range(6),3))
 
-for arr_name in arr:
-  num_ev = len(data[("match_"+arr_name)])
+## balance := [misses,hits,individual_hits]
+# for unbalanced data, use [1,1,1]
+def parse(balance,arr_name='train'):
+  
+  num_ev = int(len(data[("match_"+arr_name)])/16)
 
-  # target array
-  match_train = np.zeros((num_ev,1))
-
-  # discard events with more than 3 matches (not triplets)
-  drop_event = []
-
-  drop = 0
   hit = 0
   miss = 0
   hits = np.zeros(20)
-
+  total = 0
+  events = []
+  matches = []
+ 
   # compute match for each triplet; append to new match_
   for ev_i, event in enumerate(data[("match_"+arr_name)]):
+    total = ev_i + 1
     index = hit + miss
+
+    # skip over events with more than 3 matches (not triplets)
     if np.sum(event) > 3:
-      drop_event.append(ev_i)
-      drop += 1
       continue
     elif np.sum(event) < 3:
-      if miss >= 0.05*num_ev:
+      if miss+1 >= balance[0]*num_ev:
         continue
-      match_train[index] = 20
       miss += 1
+      matches.append(20)
+      events.append(ev_i)
       continue
     for iter_i, iter in enumerate(comb):
       if np.sum(np.take(event,iter,0)) == 3:
-        if hits[iter_i] > 0.05*num_ev:
+        if hits[iter_i]+1 > (balance[2])*num_ev:
+          if hit+1 >= (balance[1])*num_ev:
+            break
           continue
-        if hit >= 0.95*num_ev:
-          break
-        match_train[index] = iter_i
+        matches.append(iter_i)
+        events.append(ev_i)
         hit += 1
         hits[iter_i] += 1
         continue
 
-  target = match_train[:-(drop)]
-  input = np.delete(data[("jetv_"+arr_name)],drop_event,0)
+  target = np.array(matches)
+  input = np.take(data['jetv_'+arr_name],events,0)
 
   # shuffle the data
   shuffler = np.random.permutation(len(target))
   target = target[shuffler]
   input = input[shuffler]
-
-  print(len(target))
-
-  np.savez("jt_"+arr_name+".npz",targets=target,input=input)
+  final = {}
+  final['input'] = input
+  final['targets'] = target
+  return final
