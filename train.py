@@ -104,7 +104,7 @@ def train():
 
     # Terminate training after 5 consecutive epochs with no improvement
     if current_epoch_loss < current_min_loss:
-      current_min_loss = running_epoch_loss
+      current_min_loss = current_epoch_loss
       current_min_loss_epoch = epoch
       torch.save({
                 'epoch': epoch,
@@ -114,7 +114,7 @@ def train():
                 'lola_weights': model.lorentz_model.lola.w,
                 'standard_means': model.lorentz_model.standardize.means_mat,
                 'standard_stds': model.lorentz_model.standardize.stds_mat,
-            }, '/scratch365/rschill1/logs/best.zip')
+            }, ('/scratch365/rschill1/logs/best_{}.zip').format(args.filename))
 
     elif current_epoch_loss >= current_min_loss and (epoch - current_min_loss_epoch)>= 5:
       break
@@ -181,11 +181,10 @@ def evaluate(model,dataset,filename):
 
     ######## ACCURACY AND PLOTTING ########
     print(("Accuracy {}: {}").format(filename,str(acc_count/(len(out_array)))))
-    """
     out_array.sort()
     target.sort()
     plt.hist([out_array,target],bins=21)
-    plt.savefig('/scratch365/rschill1/logs/svb_{}.png'.format(filename))
+    plt.savefig('/scratch365/rschill1/logs/svb_{}_{}.png'.format(filename,args.filename))
     plt.clf()
 
     correct_out_array.sort()
