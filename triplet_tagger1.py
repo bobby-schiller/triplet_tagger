@@ -25,9 +25,10 @@ class triplet_tagger(torch.nn.Module):
     torch.nn.init.kaiming_normal_(self.layer3.weight,mode='fan_in')
     torch.nn.init.constant_(self.layer3.bias,0)
     self.activation3 = torch.nn.ReLU()
-    self.layer4 = torch.nn.Linear(size[2],21)
+    self.layer4 = torch.nn.Linear(size[2],2)
     torch.nn.init.kaiming_normal_(self.layer3.weight,mode='fan_in')
-    torch.nn.init.constant_(self.layer4.bias,0)  
+    torch.nn.init.constant_(self.layer4.bias,0)
+    self.activation4 = torch.nn.Softmax(dim=1) 
 
   def forward(self, x, **kwargs):
     # LorentzNN uses batch size of 200, so shaping input batches to fit
@@ -52,6 +53,6 @@ class triplet_tagger(torch.nn.Module):
     x = self.layer3(x)
     x = self.activation3(x)
     x = self.layer4(x)
+    x = self.activation4(x)
 
-    # Cross entropy loss demands raw logits, so no activation
     return x

@@ -6,7 +6,7 @@ executable = submit.sh
 should_transfer_files = Yes
 when_to_transfer_output = ON_EXIT
 
-transfer_input_files = lorentzNN/train.py,lorentzNN/lorentzNN.py,lorentzNN/model_handler.py,lorentzNN/model_benchmark.py,lola.py,lorentzNN/cola.py,lorentzNN/standardize.py,lorentzNN/jt_parser.py,triplet_tagger.py,train.py
+transfer_input_files = binary_jet_parser.py,triplet_tagger1.py,train_binary.py,train.py,lorentzNN/lorentzNN.py,lorentzNN/model_handler.py,lorentzNN/model_benchmark.py,lola.py,lorentzNN/cola.py,lorentzNN/standardize.py,lorentzNN/jt_parser.py,triplet_tagger.py,train.py,triplet_tagger1.py
 
 Log    = /scratch365/rschill1/logs/$(Cluster).log
 Output = /scratch365/rschill1/logs/$(Cluster)-$(Process).out
@@ -22,4 +22,4 @@ request_cpus   = 1
 
 arguments      = $(Process)
 
-queue 2
+queue Arguments from args1.txt
